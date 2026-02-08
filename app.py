@@ -47,21 +47,26 @@ if not api_key:
 
 import base64
 
+import streamlit.components.v1 as components
+
 def autoplay_audio(audio_bytes):
     """Auto-plays audio on compatible browsers using HTML5."""
-    b64 = base64.b64encode(audio_bytes).decode()
+    b64 = base64.b64encode(audio_bytes).decode('utf-8')
     md = f"""
-        <audio controls autoplay>
-        <source src="data:audio/mp3;base64,{b64}" type="audio/mp3">
+        <audio controls autoplay playsinline style="width: 100%;">
+            <source src="data:audio/mp3;base64,{b64}" type="audio/mp3">
         </audio>
         <script>
             var audio = document.querySelector("audio");
-            audio.play().catch(function(error) {{
-                console.log("Autoplay failed:", error);
-            }});
+            if (audio) {{
+                audio.play().catch(function(error) {{
+                    console.log("Autoplay failed:", error);
+                }});
+            }}
         </script>
     """
-    st.markdown(md, unsafe_allow_html=True)
+    # Use components.html to render in an iframe, which sometimes helps with permissions
+    components.html(md, height=50)
 
 def send_message_with_retry(chat, *args, retries=3, **kwargs):
     """Sends message to chat with exponential backoff on resource exhaustion."""
