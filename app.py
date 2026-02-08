@@ -51,9 +51,15 @@ def autoplay_audio(audio_bytes):
     """Auto-plays audio on compatible browsers using HTML5."""
     b64 = base64.b64encode(audio_bytes).decode()
     md = f"""
-        <audio controls autoplay playsinline>
-        <source src="data:audio/mpeg;base64,{b64}" type="audio/mpeg">
+        <audio controls autoplay>
+        <source src="data:audio/mp3;base64,{b64}" type="audio/mp3">
         </audio>
+        <script>
+            var audio = document.querySelector("audio");
+            audio.play().catch(function(error) {{
+                console.log("Autoplay failed:", error);
+            }});
+        </script>
     """
     st.markdown(md, unsafe_allow_html=True)
 
