@@ -45,6 +45,34 @@ if not api_key:
     st.error("Missing Google API Key. Please set it in `.streamlit/secrets.toml` or as an environment variable.")
     st.stop()
 
+import base64
+
+def autoplay_audio(audio_bytes):
+    """Auto-plays audio on compatible browsers using HTML5."""
+    b64 = base64.b64encode(audio_bytes).decode()
+    md = f"""
+        <audio controls autoplay playsinline>
+        <source src="data:audio/mpeg;base64,{b64}" type="audio/mpeg">
+        </audio>
+    """
+    st.markdown(md, unsafe_allow_html=True)
+
+def send_message_with_retry(chat, *args, retries=3, **kwargs):
+    """Sends message to chat with exponential backoff on resource exhaustion."""
+    for i in range(retries):
+        try:
+            return chat.send_message(*args, **kwargs)
+        except Exception as e:
+            # Check for Resource Exhausted (429) or related quota errors
+            error_str = str(e).lower()
+            if "429" in error_str or "resource" in error_str or "exhausted" in error_str or "quota" in error_str:
+                if i < retries - 1:
+                    wait_time = 2 ** (i + 1)
+                    print(f"DEBUG: Resource Exhausted. Retrying in {wait_time}s...")
+                    time.sleep(wait_time)
+                    continue
+            raise e
+
 def text_to_audio(text):
     """Converts text to audio bytes using gTTS."""
     try:
@@ -78,7 +106,7 @@ def init_chat():
                 "CRITICAL: Do NOT translate to English. Check your response and ensure it is 100% Italian."
             )
             
-            response = chat.send_message(initial_prompt)
+            response = send_message_with_retry(chat, initial_prompt)
             
             # Add initial greeting to history
             # text_to_audio now returns bytes, which is safe for st.audio
@@ -91,86 +119,7 @@ def init_chat():
         except Exception as e:
             st.error(f"Failed to initialize chat: {e}")
 
-def process_audio():
-    """Callback to process audio input."""
-    if "audio_in" in st.session_state and st.session_state.audio_in:
-        audio_widget = st.session_state.audio_in
-        try:
-            print(f"DEBUG: Processing callback for: {audio_widget}")
-            
-            # Read audio bytes
-            audio_bytes = audio_widget.getvalue()
-            print(f"DEBUG: Audio bytes read: {len(audio_bytes)}")
 
-            # Upload to Gemini
-            with tempfile.NamedTemporaryFile(delete=False, suffix=".wav") as tmp_wav:
-                tmp_wav.write(audio_bytes)
-                tmp_wav_path = tmp_wav.name
-            
-            print(f"Saved temp audio to {tmp_wav_path}")
-
-            # Upload file
-            client = st.session_state.client
-            if client:
-                print("Uploading file to Gemini...")
-                myfile = client.files.upload(file=tmp_wav_path)
-                print(f"File uploaded: {myfile.name}")
-
-                # Generate content
-                chat = st.session_state.chat_session
-                
-                # Prompt for JSON
-                prompt = (
-                    "Listen to the user's Italian audio. "
-                    "1. Transcribe exactly what the user said (in Italian). "
-                    "2. Provide a brief analysis of grammatical errors or improvements (in English or Italian as preferred for a tutor). "
-                    "3. Formulate a natural, friendly conversational response in Italian. "
-                    "Output strictly VALID JSON with keys: 'transcription', 'analysis', 'response_italian'. "
-                    "Do not use markdown code blocks for the JSON."
-                )
-                
-                print("Sending message to Gemini...")
-                response = chat.send_message([prompt, myfile])
-                
-                # Parse JSON
-                import json
-                if not response.text:
-                   raise ValueError("Gemini returned empty text.")
-
-                text_resp = response.text.strip()
-                if text_resp.startswith("```json"):
-                    text_resp = text_resp[7:]
-                if text_resp.endswith("```"):
-                    text_resp = text_resp[:-3]
-                
-                data = json.loads(text_resp)
-                user_transcription = data.get("transcription", "")
-                analysis = data.get("analysis", "")
-                model_reply = data.get("response_italian", "")
-
-                # Add User Input to History
-                st.session_state.history.append({
-                    "role": "user",
-                    "audio": None, 
-                    "text": f"**Transcription:** {user_transcription}  \n**Analysis:** {analysis}"
-                })
-                
-                # Add Model Response to History
-                resp_audio = text_to_audio(model_reply)
-                st.session_state.history.append({
-                    "role": "model",
-                    "text": model_reply,
-                    "audio": resp_audio
-                })
-                
-                # Cleanup
-                os.unlink(tmp_wav_path)
-
-        except Exception as e:
-            st.session_state.processing_error = str(e)
-            print(f"EXCEPTION IN CALLBACK: {e}")
-            import traceback
-            traceback.print_exc()
 
 def main():
     # Call init
@@ -193,7 +142,10 @@ def main():
                         do_autoplay = True
                         st.session_state.last_audio_played = len(st.session_state.history)
                     
-                    st.audio(msg["audio"], format="audio/mpeg", autoplay=do_autoplay)
+                    if do_autoplay:
+                        autoplay_audio(msg["audio"])
+                    else:
+                        st.audio(msg["audio"], format="audio/mpeg")
 
     # Audio Input Handling in Sidebar
     with st.sidebar:
@@ -242,7 +194,7 @@ def main():
                                 "Do not use markdown code blocks for the JSON."
                             )
                             
-                            response = chat.send_message([prompt, myfile])
+                            response = send_message_with_retry(chat, [prompt, myfile])
                             
                             # Parse JSON
                             import json
