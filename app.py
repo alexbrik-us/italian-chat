@@ -34,6 +34,8 @@ if "last_audio_id" not in st.session_state:
     st.session_state.last_audio_id = None
 if "client" not in st.session_state:
     st.session_state.client = None
+if "audio_unlocked" not in st.session_state:
+    st.session_state.audio_unlocked = False
 
 # API Key Configuration
 if "GOOGLE_API_KEY" in st.secrets:
@@ -51,13 +53,18 @@ import streamlit.components.v1 as components
 
 def autoplay_audio(audio_bytes):
     """Auto-plays audio on compatible browsers using HTML5."""
+    if not st.session_state.audio_unlocked:
+        # If audio not unlocked, just show a regular player
+        st.audio(audio_bytes, format="audio/mpeg")
+        return
+    
     b64 = base64.b64encode(audio_bytes).decode('utf-8')
     md = f"""
-        <audio controls autoplay playsinline style="width: 100%;">
+        <audio id="autoplayAudio" controls autoplay playsinline style="width: 100%;">
             <source src="data:audio/mp3;base64,{b64}" type="audio/mp3">
         </audio>
         <script>
-            var audio = document.querySelector("audio");
+            var audio = document.getElementById("autoplayAudio");
             if (audio) {{
                 audio.play().catch(function(error) {{
                     console.log("Autoplay failed:", error);
@@ -65,8 +72,26 @@ def autoplay_audio(audio_bytes):
             }}
         </script>
     """
-    # Use components.html to render in an iframe, which sometimes helps with permissions
     components.html(md, height=50)
+
+def unlock_audio_js():
+    """Inject JS to unlock audio on iOS."""
+    js = """
+        <script>
+            // Create a silent audio context to unlock audio
+            var AudioContext = window.AudioContext || window.webkitAudioContext;
+            if (AudioContext) {
+                var ctx = new AudioContext();
+                var buffer = ctx.createBuffer(1, 1, 22050);
+                var source = ctx.createBufferSource();
+                source.buffer = buffer;
+                source.connect(ctx.destination);
+                source.start(0);
+                console.log("Audio unlocked!");
+            }
+        </script>
+    """
+    components.html(js, height=0)
 
 def send_message_with_retry(chat, *args, retries=3, **kwargs):
     """Sends message to chat with exponential backoff on resource exhaustion."""
@@ -160,6 +185,16 @@ def main():
 
     # Audio Input Handling in Sidebar
     with st.sidebar:
+        # Audio Unlock Button (for iOS)
+        if not st.session_state.audio_unlocked:
+            st.warning("🔊 Tap below to enable audio playback (required on iOS)")
+            if st.button("🔊 Enable Audio", use_container_width=True):
+                st.session_state.audio_unlocked = True
+                unlock_audio_js()
+                st.rerun()
+        else:
+            st.success("✅ Audio enabled")
+        
         st.divider()
         try:
             if mic_recorder:
