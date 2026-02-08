@@ -6,11 +6,12 @@ import tempfile
 import os
 import time
 from io import BytesIO
+from io import BytesIO
 try:
-    from audio_recorder_streamlit import audio_recorder
+    from streamlit_mic_recorder import mic_recorder
 except ImportError:
-    st.error("Library `audio-recorder-streamlit` not found. Please run `pip install audio-recorder-streamlit`.")
-    audio_recorder = None
+    st.error("Library `streamlit-mic-recorder` not found. Please run `pip install streamlit-mic-recorder`.")
+    mic_recorder = None
 
 # UI Configuration
 st.set_page_config(
@@ -198,26 +199,23 @@ def main():
     with st.sidebar:
         st.divider()
         try:
-            if audio_recorder:
-                # audio_recorder returns bytes directly
-                audio_bytes = audio_recorder(
-                    text="Click to Record",
-                    recording_color="#e8b62c",
-                    neutral_color="#6aa36f",
-                    icon_name="microphone",
-                    icon_size="2x"
+            if mic_recorder:
+                # mic_recorder returns a dict: {'bytes': b'...', 'sample_rate': 44100, 'id': '...'}
+                audio_data = mic_recorder(
+                    start_prompt="Start Recording",
+                    stop_prompt="Stop Recording",
+                    key="recorder",
+                    format="wav",
+                    use_container_width=True
                 )
             else:
-                st.error("Audio Recorder library missing.")
-                audio_bytes = None
+                st.error("Mic Recorder library missing.")
+                audio_data = None
             
-            if audio_bytes:
+            if audio_data and audio_data['bytes']:
+                audio_bytes = audio_data['bytes']
                 # Check if this is new audio
                 # We can hash it or just check if it's different from last time
-                # But audio_recorder returns the bytes of the last recording.
-                # We need a way to know if it's "new" processing.
-                # A simple way is to store the hash or length in session state.
-                
                 audio_hash = hash(audio_bytes)
                 if st.session_state.last_audio_id != audio_hash:
                     st.session_state.last_audio_id = audio_hash
