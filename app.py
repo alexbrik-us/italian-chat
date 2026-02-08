@@ -99,10 +99,10 @@ with chat_container:
 if st.session_state.history:
     last_msg = st.session_state.history[-1]
     if last_msg["role"] == "model" and not st.session_state.get("last_audio_played") == len(st.session_state.history):
-        # This is a new message from model
-        if last_msg.get("audio"):
-             st.audio(last_msg["audio"], format="audio/mp3", autoplay=True)
-             st.session_state.last_audio_played = len(st.session_state.history)
+        # This is a new message from                if last_msg.get("audio"):
+                     # iOS often prefers audio/mpeg for MP3
+                     st.audio(last_msg["audio"], format="audio/mpeg", autoplay=True)
+                     st.session_state.last_audio_played = len(st.session_state.history)
 
 # Audio Input Handling in Sidebar
 with st.sidebar:
@@ -110,13 +110,13 @@ with st.sidebar:
     audio_input = st.audio_input("🎤 Record your Italian")
 
 if audio_input is not None:
-    current_audio_id = audio_input.file_id if hasattr(audio_input, 'file_id') else str(audio_input.size) # Fallback
-    
-    if current_audio_id != st.session_state.last_audio_id:
-        st.session_state.last_audio_id = current_audio_id
+    try:
+        current_audio_id = audio_input.file_id if hasattr(audio_input, 'file_id') else str(audio_input.size) # Fallback
         
-        with st.spinner("Listening & Thinking..."):
-            try:
+        if current_audio_id != st.session_state.last_audio_id:
+            st.session_state.last_audio_id = current_audio_id
+            
+            with st.spinner("Listening & Thinking..."):
                 print(f"DEBUG: Processing audio input object: {audio_input}")
                 print("DEBUG: Checking file_id/size...")
                 # Read audio bytes
@@ -134,6 +134,8 @@ if audio_input is not None:
                 client = st.session_state.client
                 if client:
                     print("Uploading file to Gemini...")
+                    # Fix: use path argument if possible, or keyword 'file'
+                    # The genai SDK creates a file. 
                     myfile = client.files.upload(file=tmp_wav_path)
                     print(f"File uploaded: {myfile.name}")
 
@@ -151,18 +153,23 @@ if audio_input is not None:
                     )
                     
                     print("Sending message to Gemini...")
+                    # Send message with file
+                    # Configure generation config for JSON if supported or just text
                     response = chat.send_message([prompt, myfile])
                     print("Received response from Gemini.")
                     
                     # Parse JSON
                     import json
+                    # Inspect response safely
                     if not response.text:
-                        print("Response text is empty.")
-                        raise ValueError("Gemini returned empty text.")
+                        print("Response text is empty. Checking candidates.")
+                        # Fallback if blocked
+                        raise ValueError("Gemini returned empty text (possibly safety block).")
 
                     text_resp = response.text.strip()
                     print(f"Raw response text: {text_resp}")
 
+                    # Clean cleanup if model adds markdown
                     if text_resp.startswith("```json"):
                         text_resp = text_resp[7:]
                     if text_resp.endswith("```"):
@@ -194,10 +201,11 @@ if audio_input is not None:
                     
                     st.rerun()
 
-            except Exception as e:
-                st.error(f"CRITICAL ERROR: {str(e)}")
-                st.write("Traceback:")
-                import traceback
-                st.code(traceback.format_exc())
-                print("EXCEPTION OCCURRED: " + str(e))
-                traceback.print_exc()
+    except Exception as e:
+        st.error(f"CRITICAL ERROR: {str(e)}")
+        st.write("Reference this error for debugging:")
+        st.code(str(e))
+        import traceback
+        st.code(traceback.format_exc())
+        print("EXCEPTION OCCURRED: " + str(e))
+        traceback.print_exc()
