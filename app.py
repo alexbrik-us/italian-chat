@@ -53,11 +53,6 @@ import streamlit.components.v1 as components
 
 def autoplay_audio(audio_bytes):
     """Auto-plays audio on compatible browsers using HTML5."""
-    if not st.session_state.audio_unlocked:
-        # If audio not unlocked, just show a regular player
-        st.audio(audio_bytes, format="audio/mpeg")
-        return
-    
     b64 = base64.b64encode(audio_bytes).decode('utf-8')
     md = f"""
         <audio id="autoplayAudio" controls autoplay playsinline style="width: 100%;">
@@ -185,16 +180,6 @@ def main():
 
     # Audio Input Handling in Sidebar
     with st.sidebar:
-        # Audio Unlock Button (for iOS)
-        if not st.session_state.audio_unlocked:
-            st.warning("🔊 Tap below to enable audio playback (required on iOS)")
-            if st.button("🔊 Enable Audio", use_container_width=True):
-                st.session_state.audio_unlocked = True
-                unlock_audio_js()
-                st.rerun()
-        else:
-            st.success("✅ Audio enabled")
-        
         st.divider()
         try:
             if mic_recorder:
