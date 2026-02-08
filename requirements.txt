@@ -1,3 +1,6 @@
 streamlit>=1.37.0
 google-genai
+streamlit
 gTTS
+watchdog
+streamlit-mic-recorder
