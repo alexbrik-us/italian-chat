@@ -6,6 +6,11 @@ import tempfile
 import os
 import time
 from io import BytesIO
+try:
+    from audio_recorder_streamlit import audio_recorder
+except ImportError:
+    st.error("Library `audio-recorder-streamlit` not found. Please run `pip install audio-recorder-streamlit`.")
+    audio_recorder = None
 
 # UI Configuration
 st.set_page_config(
@@ -193,15 +198,18 @@ def main():
     with st.sidebar:
         st.divider()
         try:
-            from audio_recorder_streamlit import audio_recorder
-            # audio_recorder returns bytes directly
-            audio_bytes = audio_recorder(
-                text="Click to Record",
-                recording_color="#e8b62c",
-                neutral_color="#6aa36f",
-                icon_name="microphone",
-                icon_size="2x"
-            )
+            if audio_recorder:
+                # audio_recorder returns bytes directly
+                audio_bytes = audio_recorder(
+                    text="Click to Record",
+                    recording_color="#e8b62c",
+                    neutral_color="#6aa36f",
+                    icon_name="microphone",
+                    icon_size="2x"
+                )
+            else:
+                st.error("Audio Recorder library missing.")
+                audio_bytes = None
             
             if audio_bytes:
                 # Check if this is new audio
