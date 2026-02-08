@@ -88,21 +88,23 @@ init_chat()
 # Display Chat History
 chat_container = st.container()
 with chat_container:
-    for msg in st.session_state.history:
+    for i, msg in enumerate(st.session_state.history):
         with st.chat_message(msg["role"]):
             if msg.get("text"):
                 st.write(msg["text"])
             if msg.get("audio"):
-                st.audio(msg["audio"], format="audio/mp3")
-
-# Auto-play the latest model message if it hasn't been played yet
-if st.session_state.history:
-    last_msg = st.session_state.history[-1]
-    if last_msg["role"] == "model" and not st.session_state.get("last_audio_played") == len(st.session_state.history):
-        # This is a new message from                if last_msg.get("audio"):
-                     # iOS often prefers audio/mpeg for MP3
-                     st.audio(last_msg["audio"], format="audio/mpeg", autoplay=True)
-                     st.session_state.last_audio_played = len(st.session_state.history)
+                # Determine if this audio should autoplay
+                # It should auto-play if it's the very last message, it's from the model,
+                # and we haven't played this specific index yet.
+                do_autoplay = False
+                if (i == len(st.session_state.history) - 1 and 
+                    msg["role"] == "model" and 
+                    st.session_state.get("last_audio_played") != len(st.session_state.history)):
+                    
+                    do_autoplay = True
+                    st.session_state.last_audio_played = len(st.session_state.history)
+                
+                st.audio(msg["audio"], format="audio/mpeg", autoplay=do_autoplay)
 
 # Audio Input Handling in Sidebar
 with st.sidebar:
